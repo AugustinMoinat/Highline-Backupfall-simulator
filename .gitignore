@@ -1,9 +1,4 @@
 
-.idea/.name
-.idea/inspectionProfiles/profiles_settings.xml
-.idea/ISA_Backupfall.iml
-.idea/misc.xml
-.idea/modules.xml
-__pycache__/data_visualisation.cpython-39.pyc
-__pycache__/line_and_slacker.cpython-39.pyc
-__pycache__/parameters.cpython-39.pyc
+.idea/
+__pycache__/
+results/
