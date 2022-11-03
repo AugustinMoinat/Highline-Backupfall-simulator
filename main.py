@@ -12,10 +12,10 @@ if not os.path.exists(general):
 folder = general + datetime.now().strftime("%y-%m-%d-%H-%M-%S/")
 os.mkdir(folder)
 
-load = True # either load a previous save state, or calculate a line with parameters from parameters.py
+load = False # either load a previous save state, or calculate a line with parameters from parameters.py
 # This is the main function execution
 if load:
-    save_file = './save_states/freestyle.pk'  # save state path, must be a pickle file
+    save_file = './save_states/world_record.pk'  # save state path, must be a pickle file
     n, data = load_and_play(save_file, dt, steps, max_steps, folder)
 else:
     n, data = run_and_play(length, height, setup, maxt, leg_length, weight, leash_length,

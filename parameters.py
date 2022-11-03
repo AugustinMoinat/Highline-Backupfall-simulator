@@ -15,35 +15,38 @@ dyneema = Webbing(0.05, 0.005, 10000, 0.1)
 
 p = Segment(polyester_light,50,polyester_light,60,10)
 s = Segment(nylon_heavy,85,nylon_light,95,10)
-n = Segment(nylon_light,100,dyneema,120,15)
-d = Segment(dyneema_light,100,dyneema_light,107,10)
+n = Segment(nylon_light,30,dyneema,34,10)
+d = Segment(dyneema_light,50,dyneema_light,53,10)
 s2 = Segment(nylon_heavy,100,nylon_light,112,10)
-f = Segment(nylon_light,30,dyneema_light,33,10)
+f = Segment(nylon_light,30,dyneema_light,33.5,10)
+
 
 # Define a setup as a list of sections
 
 freestyle = [f, f]
-length_freestyle = 63
+length_freestyle = 64
 backup_phi = [Segment(polyester_light,257,polyester_light,275,25)]
 length_backup_phi = 262
 world_record_setup = [d for i in range(27)]
 world_record_length = 2717
 
+
+
 maxt = 10000  # maxt is used for the color scale (white: 0 N -> red: maxt N)
 
-setup = backup_phi
+setup = freestyle
 
 # Define a spot (has to  be consistent with length)
 
-length = length_backup_phi
-height = 100  # if height > length/2, will not show on display
+length = length_freestyle
+height = 30  # if height > length/2, will not show on display
 
 # Slackliner's characteristics
 leg_length = 1
 weight = 82
 leash_length = 1.5
 power = 2.5  # fraction of body weight that the legs can hold.
-position = [0, 12]  # section number and model unit in that section
+position = [1, 5]  # section number and model unit in that section
 
 # Define time computation parameters
 dt = 0.01   # time increments for measure and display update
