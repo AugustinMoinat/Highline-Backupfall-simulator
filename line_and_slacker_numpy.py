@@ -1,4 +1,4 @@
-from math import sqrt, fabs
+from math import sqrt, fabs, ceil
 import pygame
 import pandas as pd
 from random import randint
@@ -17,10 +17,6 @@ class Element:
         self.compute_speed(dt)
         self.compute_position(dt)
 
-    def draw(self, win, scale):
-        pygame.draw.circle(win, (255, max(255*(1-self.t/self.maxt), 0), max(255*(1-self.t/self.maxt), 0)),
-                           (self.x*scale, self.y*scale), scale)
-
 
 class Anchor(Element):
     # Nothing to see here
@@ -38,11 +34,11 @@ class Webbing:
     def __init__(self, lw, stretch, force, d):
         # linear weight, stretch amount (10% -> 0.1), force for that stretch (N), drag
         self.lw = lw
-        self.k = force/stretch
+        self.k = force / stretch
         self.d = d
 
     def describe(self):
-        return f'lw:{self.lw * 1000} g/m_sc:{self.k/1000:.2f}kN/m_dc:{self.d}'
+        return f'lw:{self.lw * 1000} g/m_sc:{self.k / 1000:.2f}kN/m_dc:{self.d}'
 
 
 class Segment(Element):
@@ -50,13 +46,13 @@ class Segment(Element):
         self.webbing = webbing
         self.len = length
         self.num_points = num_points  # number of points
-        self.dl = length/(num_points + 1)
+        self.dl = length / (num_points + 1)
         self.dw = webbing.lw * self.dl
         self.k = webbing.k
         self.d = webbing.d
         self.maxt = maxt  # for color scale
         self.mint = mint
-        self.points = np.linspace(start_point, end_point, num_points+2)
+        self.points = np.linspace(start_point, end_point, num_points + 2)
         self.speeds = np.zeros([num_points, 2])
         self.accelerations = np.zeros([num_points, 2])
         self.tensions = np.zeros(num_points + 1)
@@ -94,13 +90,13 @@ class Segment(Element):
 
     def draw(self, win, scale):
         colors = 255 * np.fmin(np.fmax((self.maxt - self.tensions) / (self.maxt - self.mint), [0]), [1])
-        for i in range(self.num_points+1):
-            pygame.draw.line(win, (255, colors[i], colors[i]),(self.points[i,0] * scale, self.points[i,1] * scale),
-                             (self.points[i+1, 0] * scale, self.points[i+1, 1] * scale), 3)
+        for i in range(self.num_points + 1):
+            pygame.draw.line(win, (255, colors[i], colors[i]), (self.points[i, 0] * scale, self.points[i, 1] * scale),
+                             (self.points[i + 1, 0] * scale, self.points[i + 1, 1] * scale), 3)
 
 
 class CutEnd(Element):
-    def __init__(self, segment, start, w, d):
+    def __init__(self, segment, start, speed, w, d):
         self.w = w  # weight
         self.d = d  # drag
         self.segment = segment
@@ -109,8 +105,8 @@ class CutEnd(Element):
             self.position = segment.points[0]
         else:
             self.position = segment.points[-1]
-        self.acceleration = [0,0]
-        self.speed = [0,0]
+        self.acceleration = [0, 0]
+        self.speed = speed
 
     def compute_acceleration(self):
         self.acceleration = [0, 9.81]
@@ -123,175 +119,49 @@ class CutEnd(Element):
     def compute_speed(self, dt):
         self.speed += self.acceleration * dt
 
-    def compute_position(self,dt):
+    def compute_position(self, dt):
         self.position += self.speed * dt
+        # Update position for end of connected segment
         if self.start:
             self.segment.points[0] = self.position
         else:
             self.segment.points[-1] = self.position
 
 
-class WebbingUnit(Element):
-    def __init__(self, x, y, w, l, k, d, maxt=12750, is_cut=False):
-        # position, weight, natural length, stretch constant,drag, max tension (for color scale)
-        self.x = x
-        self.y = y
-        self.vx = 0  # horizontal speed
-        self.vy = 0  # vertical speed
-        self.ax = 0  # horizontal acceleration
-        self.ay = 0  # vertical acceleration
-        self.w = w
-        self.l = l
-        self.k = k
-        self.xp = x - l/2  # connection point with previous element
-        self.xn = x + l/2  # connection point with next element
-        self.yp = y
-        self.yn = y
-        self.d = d
-        self.t = 0
-        self.maxt = maxt
-        self.is_cut = is_cut
-
-    def draw(self, win, scale):
-        if not self.is_cut:
-            pygame.draw.line(win, (255, max(255*(1-self.t/self.maxt),0), max(255*(1-self.t/self.maxt), 0)),
-                             (self.xp*scale, self.yp*scale), (self.xn*scale, self.yn*scale), 3)
-
-    def connection_next(self, next):
-        # the connection point is in the middle
-        self.xn = (self.x + next.x) / 2
-        self.yn = (self.y + next.y) / 2
-        next.xp = self.xn
-        next.yp = self.yn
-        # except in the cases where one of the two is cut, then there is no connection, use default position
-        if self.is_cut:
-            next.xp = next.x
-            next.yp = next.y + next.l / 2
-        if next.is_cut:
-            self.xn = self.x
-            self.yn = self.y + self.l / 2
-
-    def acceleration(self):
-        # forces that apply: elasticity and gravity
-        g = 9.81 * self.w
-        dn = sqrt(pow((self.x - self.xn), 2) + pow((self.y - self.yn), 2))
-        dp = sqrt(pow((self.x - self.xp), 2) + pow((self.y - self.yp), 2))
-        Fn = -self.k * max((dn - self.l/2), 0) * 2 / self.l
-        Fp = -self.k * max((dp - self.l/2), 0) * 2 / self.l
-        self.t = max(fabs(Fn), fabs(Fp))
-        if self.is_cut:
-            self.t = 0
-        Fy = Fn * (self.y - self.yn)/dn + Fp * (self.y - self.yp)/dp + g - fabs(self.vy) * self.vy * self.d * (dn+dp)
-        Fx = Fn * (self.x - self.xn)/dn + Fp * (self.x - self.xp)/dp - fabs(self.vx) * self.vx * self.d * (dn+dp)
-        self.ax = Fx / self.w
-        self.ay = Fy / self.w
-        return self.t
-
-    def copy_unit(self, is_cut=False):
-        if is_cut:
-            k = 0
-        else:
-            k = self.k
-        copy = WebbingUnit(self.x,self.y,self.w,self.l,k,self.d,self.maxt, is_cut)
-        copy.vx = self.vx
-        copy.vy = self.vy
-        copy.ax = self.ax
-        copy.ay = self.ay
-        copy.xp = self.xp
-        copy.xn = self.xn
-        copy.yp = self.yp
-        copy.yn = self.yn
-        copy.t = self.t
-        return copy
-
-
 class Split(Element):
-    def __init__(self, x, y, w, lpm, lpb, lnm, lnb, kpm, kpb, knm, knb, d, maxt=12750):
+    def __init__(self, position, w, d, left_main, left_backup, right_main, right_backup):
         # position, weight, natural length, stretch constant for main and back-up, previous and next,
         # drag, max tension (for color scale)
-        self.x = x
-        self.y = y
-        self.vx = 0  # horizontal speed
-        self.vy = 0  # vertical speed
+        self.position = position
+        self.speed = [0, 0]
+        self.acceleration = [0, 0]
         self.w = w
-        self.lpm = lpm
-        self.lpb = lpb
-        self.lnm = lnm
-        self.lnb = lnb
-        self.kpm = kpm
-        self.kpb = kpb
-        self.knm = knm
-        self.knb = knb
-        self.ax = 0  # horizontal acceleration
-        self.ay = 0  # vertical acceleration
-        self.xpm = x  # connection point with previous mainline element
-        self.xnm = x  # connection point with next mainline element
-        self.ypm = y
-        self.ynm = y
-        self.xpb = x  # connection point with previous backup element
-        self.xnb = x  # connection point with next backup element
-        self.ypb = y
-        self.ynb = y
         self.d = d
-        self.t = 0
-        self.maxt = maxt
+        self.left_main = left_main
+        self.left_backup = left_backup
+        self.right_main = right_main
+        self.right_backup = right_backup
 
-    def connection_point(self, previous_main, next_main, previous_backup, next_backup):
-        # Connection point with previous and next WebbingUnit elements, with main and back-up
-        self.xpm = (self.x + previous_main.x)/2
-        self.ypm = (self.y + previous_main.y)/2
-        previous_main.xn = self.xpm
-        previous_main.yn = self.ypm
-        self.xpb = (self.x + previous_backup.x) / 2
-        self.ypb = (self.y + previous_backup.y) / 2
-        previous_backup.xn = self.xpb
-        previous_backup.yn = self.ypb
-        if previous_main.is_cut:
-            self.xpb = self.x
-            self.ypb = self.y + self.lpb / 2
-        self.xnm = (self.x + next_main.x) / 2
-        self.ynm = (self.y + next_main.y) / 2
-        next_main.xp = self.xnm
-        next_main.yp = self.ynm
-        self.xnb = (self.x + next_backup.x) / 2
-        self.ynb = (self.y + next_backup.y) / 2
-        next_backup.xp = self.xnb
-        next_backup.yp = self.ynb
-        if next_main.is_cut:
-            self.xnb = self.x
-            self.ynb = self.y + self.lnb / 2
-
-    def acceleration(self):
+    def compute_acceleration(self):
         # forces that apply: elasticity and gravity
-        g = 9.81 * self.w
-        dnm = sqrt(pow((self.x - self.xnm), 2) + pow((self.y - self.ynm), 2))
-        dpm = sqrt(pow((self.x - self.xpm), 2) + pow((self.y - self.ypm), 2))
-        dnb = sqrt(pow((self.x - self.xnb), 2) + pow((self.y - self.ynb), 2))
-        dpb = sqrt(pow((self.x - self.xpb), 2) + pow((self.y - self.ypb), 2))
-        Fnm = -self.knm * max((dnm - self.lnm), 0) / self.lnm
-        Fpm = -self.kpm * max((dpm - self.lpm), 0) / self.lpm
-        Fnb = -self.knb * max((dnb - self.lnb), 0) / self.lnb
-        Fpb = -self.kpb * max((dpb - self.lpb), 0) / self.lpb
-        self.t = max(fabs(Fnm), fabs(Fpm), fabs(Fnb), fabs(Fpb))
-        Fmy = Fnm * (self.y - self.ynm) / dnm + Fpm * (self.y - self.ypm) / dpm
-        Fby = Fnb * (self.y - self.ynb) / dnb + Fpb * (self.y - self.ypb) / dpb
-        Fmx = Fnm * (self.x - self.xnm) / dnm + Fpm * (self.x - self.xpm) / dpm
-        Fbx = Fnb * (self.x - self.xnb) / dnb + Fpb * (self.x - self.xpb) / dpb
-        Fy = Fmy + Fby + g - fabs(self.vy) * self.vy * self.d * (dnm+dpm+dnb+dpb)
-        Fx = Fmx + Fbx - fabs(self.vx) * self.vx * self.d * (dnm+dpm+dnb+dpb)
-        self.ax = Fx / self.w
-        self.ay = Fy / self.w
-        return self.t
+        self.acceleration = [0, 9.81]
+        self.acceleration += self.right_backup.tensions_coordinates[0] / self.w
+        self.acceleration += self.right_main.tensions_coordinates[0] / self.w
+        self.acceleration -= self.left_backup.tensions_coordinates[-1] / self.w
+        self.acceleration -= self.left_main.tensions_coordinates[-1] / self.w
+        self.acceleration -= self.speed * np.fabs(self.speed) * self.d / self.w
 
-    def draw(self, win, scale):
-        pygame.draw.line(win, (255, max(255*(1-self.t/self.maxt),0), max(255*(1-self.t/self.maxt),0)),
-                         (self.x*scale,self.y*scale), (self.xnm*scale,self.ynm*scale), 3)
-        pygame.draw.line(win, (255, max(255 * (1 - self.t / self.maxt), 0), max(255 * (1 - self.t / self.maxt), 0)),
-                         (self.x * scale, self.y * scale), (self.xnb * scale, self.ynb * scale), 3)
-        pygame.draw.line(win, (255, max(255 * (1 - self.t / self.maxt), 0), max(255 * (1 - self.t / self.maxt), 0)),
-                         (self.x * scale, self.y * scale), (self.xpm * scale, self.ypm * scale), 3)
-        pygame.draw.line(win, (255, max(255 * (1 - self.t / self.maxt), 0), max(255 * (1 - self.t / self.maxt), 0)),
-                         (self.x * scale, self.y * scale), (self.xpb * scale, self.ypb * scale), 3)
+    def compute_speed(self, dt):
+        self.speed += self.acceleration * dt
+
+    def compute_position(self, dt):
+        self.position += self.speed * dt
+        # Update positions for ends of connected segments
+        self.right_backup.points[0] = self.position
+        self.right_main.points[0] = self.position
+        self.left_backup.points[-1] = self.position
+        self.right_backup.points[-1] = self.position
+
 
 
 class Spot:
@@ -306,218 +176,86 @@ class Spot:
         return f'length: {self.g} m, height: {self.h} m'
 
 
+class SetUpError(Exception):
+    pass
+
+
+class SetUp:
+    def __init__(self, mains, backups, main_lengths, backup_lengths, points_per_meter):
+        # Check that the parameters are correct
+        if len(mains) != len(backups) or len(mains) != len(main_lengths) or len(mains) != len(backup_lengths):
+            raise SetUpError
+        if len(mains) == 0:
+            raise SetUpError
+        # Initialize
+        self.mains = mains
+        self.backups = backups
+        self.main_lengths = main_lengths
+        self.backup_lengths = backup_lengths
+        self.num_segment = len(mains)
+        self.total_length = sum(main_lengths)
+        self.points_per_meter = points_per_meter
+
+
 class Rig:
-    def __init__(self, setup, spot, maxt=12750):
+    def __init__(self, setup, spot, mint=0, maxt=10000):
         # setup: list of Segments not empty
-        self.segments = setup
+        self.setup = setup
         self.spot = spot
+        self.mint = mint
         self.maxt = maxt
         # calculate set-up mainline length and number of segments
-        self.main_length = 0
-        self.num_segment = 0
-        for segment in self.segments:
-            self.main_length += segment.main_l
-            self.num_segment += 1
-        ratio = spot.g/self.main_length  # for original placement of  the line
-        self.mains = []  # list of lists of WebbingUnit
-        self.backups = []  # list of lists of WebbingUnit
+        ratio = spot.g / self.setup.total_length  # for original placement of  the line
+        self.mains = []  # list of Segments
+        self.backups = []  # list of Segments
         self.splits = []  # list of Split
-        self.tension_main = []
-        self.i_tension_main = []
+        self.tension_main = []  # update the tension after each time increment
+        self.i_tension_main = []  # record the highest tension since last record
         self.tension_backup = []
         self.i_tension_backup = []
-        self.tension_split = []
-        self.i_tension_split = []
 
-        # Compute the WebbingUnit and Split
-        if self.num_segment == 0:
-            raise ValueError
-        elif self.num_segment == 1:
-            # single segment goes anchor to anchor
-            segment = self.segments[0]
-            dx = self.spot.g/segment.np  # horizontal space between each WebbingUnit
-            dlm = segment.main_l/segment.np  # length of each WebbingUnit for mainline
-            dlb = segment.backup_l/segment.np  # length of each WebbingUnit for backup
-            main = []  # contains the WebbingUnit of the mainline
-            back = []  # contains the WebbingUnit of the backup
-            for i in range(segment.np):
-                main.append(WebbingUnit((i+0.5)*dx, self.spot.h, segment.main.lw*dlm,
-                                        dlm, segment.main.k, segment.main.d, maxt))
-                back.append(WebbingUnit((i+0.5)*dx, self.spot.h, segment.backup.lw*dlb,
-                                        dlb, segment.backup.k, segment.backup.d, maxt))
-            self.mains.append(main)
-            self.tension_main.append(0)
-            self.i_tension_main.append(0)
-            self.backups.append(back)
-            self.tension_backup.append(0)
-            self.i_tension_backup.append(0)
-        else:
-            segment = self.segments[0]
-            segment_length = segment.main_l*ratio  # stretch to fit the gap
-            dx = segment_length/(segment.np+0.5)  # half a segment is for the split
-            dlm = segment.main_l/(segment.np+0.5)
-            dlb = segment.backup_l/(segment.np+0.5)
-            km = segment.main.k
-            kb = segment.backup.k
-            dm = segment.main.d
-            db = segment.backup.d
-            main = []
-            back = []
-            # Create WebbingUnit for the first segment
-            for i in range(segment.np):
-                main.append(WebbingUnit((i+0.5)*dx, self.spot.h, segment.main.lw*dlm, dlm, km, dm, maxt))
-                back.append(WebbingUnit((i+0.5)*dx, self.spot.h, segment.backup.lw*dlb, dlb, kb, db, maxt))
-            self.mains.append(main)
-            self.tension_main.append(0)
-            self.i_tension_main.append(0)
-            self.backups.append(back)
-            self.tension_backup.append(0)
-            self.i_tension_backup.append(0)
-            split_weight = 0.5*(segment.main.lw*dlm+segment.backup.lw*dlb)
-            zero_point = segment_length  # Base point for next split and segment
-
-            # Treat all intermediate segments
-            for i in range(1, self.num_segment-1):
-                segment = self.segments[i]
-                segment_length = segment.main_l * ratio
-                dx = segment_length / (segment.np + 1)  # intermediate segments have 2 half lengths for splits
-                dlm2 = segment.main_l / (segment.np + 1)
-                dlb2 = segment.backup_l / (segment.np + 1)
-                # Get constants to create the split, keep previous ones
-                km2 = segment.main.k
-                kb2 = segment.backup.k
-                dm2 = segment.main.d
-                db2 = segment.backup.d
-                split_weight2 = 0.5*(segment.main.lw*dlm+segment.backup.lw*dlb)
-                # create the Split
-                self.splits.append(Split(zero_point, self.spot.h, split_weight+split_weight2,
-                                         dlm/2, dlb/2, dlm2/2, dlb2/2, km, kb, km2, kb2, dm+db+dm2+db2, maxt))
-                self.tension_split.append(0)
-                self.i_tension_split.append(0)
-                # update constants
-                split_weight = split_weight2
-                dlm = dlm2
-                dlb = dlb2
-                km = km2
-                kb = kb2
-                dm = dm2
-                db = db2
-                main = []
-                back = []
-                # Create the webbing units
-                for j in range(segment.np):
-                    main.append(WebbingUnit(zero_point + (j + 1) * dx, self.spot.h, segment.main.lw * dlm,
-                                            dlm, km, dm, maxt))
-                    back.append(WebbingUnit(zero_point + (j + 1) * dx, self.spot.h, segment.backup.lw * dlb,
-                                            dlb, kb, db, maxt))
-                self.mains.append(main)
-                self.tension_main.append(0)
-                self.i_tension_main.append(0)
-                self.backups.append(back)
-                self.tension_backup.append(0)
-                self.i_tension_backup.append(0)
-                # move reference point
-                zero_point += segment_length
-
-            # Create last Split and last segment of WebbingUnit,
-            segment = self.segments[-1]
-            segment_length = segment.main_l * ratio
-            dx = segment_length / (segment.np + 0.5)  # half an extra length for the split
-            dlm2 = segment.main_l / (segment.np + 0.5)
-            dlb2 = segment.backup_l / (segment.np + 0.5)
-            # Get constants to create the split, keep previous ones
-            km2 = segment.main.k
-            kb2 = segment.backup.k
-            dm2 = segment.main.d
-            db2 = segment.backup.d
-            split_weight2 = 0.5 * (segment.main.lw * dlm + segment.backup.lw * dlb)
-            # create the Split
-            self.splits.append(Split(zero_point, self.spot.h, split_weight + split_weight2,
-                                     dlm/2, dlb/2, dlm2/2, dlb2/2, km, kb, km2, kb2, dm + db + dm2 + db2, maxt))
-            self.tension_split.append(0)
-            self.i_tension_split.append(0)
-            # Update the constants
-            dlm = dlm2
-            dlb = dlb2
-            km = km2
-            kb = kb2
-            dm = dm2
-            db = db2
-            main = []
-            back = []
-            # Create the last segments of WebbingUnit
-            for j in range(segment.np):
-                main.append(WebbingUnit(zero_point + (j + 1) * dx, self.spot.h, segment.main.lw * dlm,
-                                        dlm, km, dm, maxt))
-                back.append(WebbingUnit(zero_point + (j + 1) * dx, self.spot.h, segment.backup.lw * dlb,
-                                        dlb, kb, db, maxt))
-            self.mains.append(main)
-            self.tension_main.append(0)
-            self.i_tension_main.append(0)
-            self.backups.append(back)
-            self.tension_backup.append(0)
-            self.i_tension_backup.append(0)
-
-    def connections(self):
-        # updates all connection points
-        # Connection with first anchor, for main and back-up first element of first segment
-        self.spot.anchor1.start_connection(self.mains[0][0])
-        self.spot.anchor1.start_connection(self.backups[0][0])
-        # Connection of each (except for last) WebbingUnit with next one for first segment
-        for j in range(self.segments[0].np-1):
-            self.mains[0][j].connection_next(self.mains[0][j+1])
-            self.backups[0][j].connection_next(self.backups[0][j + 1])
-        # Run through all segments except first and last
-        for i in range(1, self.num_segment-1):
-            # Connection of split with previous and next, main and backup
-            self.splits[i-1].connection_point(self.mains[i-1][-1], self.mains[i][0],
-                                              self.backups[i-1][-1], self.backups[i][0])
-            # Connection of each (except for last) WebbingUnit with next one for this segment
-            for j in range(self.segments[i].np - 1):
-                self.mains[i][j].connection_next(self.mains[i][j + 1])
-                self.backups[i][j].connection_next(self.backups[i][j + 1])
-        # connection for last split, with previous and next, main and backup
-        if self.num_segment > 1:
-            self.splits[-1].connection_point(self.mains[-2][-1], self.mains[-1][0],
-                                             self.backups[-2][-1], self.backups[-1][0])
-            # Connection of each (except for last) WebbingUnit with next one for the last segment
-            for j in range(self.segments[-1].np - 1):
-                self.mains[-1][j].connection_next(self.mains[-1][j + 1])
-                self.backups[-1][j].connection_next(self.backups[-1][j + 1])
-        # connection of anchor2 with last WebbingUnit of main and backup
-        self.spot.anchor2.end_connection(self.mains[-1][-1])
-        self.spot.anchor2.end_connection(self.backups[-1][-1])
+        # Compute the Segments
+        start_x = 0
+        end_x = 0
+        for i in range(spot.num_segment):
+            num_points = ceil(spot.main_lengths[i] * spot.points_per_meter)
+            end_x += spot.main_lengths[i] * ratio
+            self.mains.append(Segment(setup.mains[i], setup.main_lengths[i], num_points,
+                                      [start_x, spot.h], [end_x, spot.h], maxt, mint))
+            self.backups.append(Segment(setup.backups[i], setup.backups_lengths[i], num_points,
+                                        [start_x, spot.h], [end_x, spot.h], maxt, mint))
+            splitweight = setup.mains[i].lw * setup.main_lengths[i] / num_points \
+                          + setup.backups[i].lw * setup.backups_lengths[i] / num_points
+            splitdrag = setup.mains[i].d * setup.main_lengths[i] / num_points \
+                        + setup.backups[i].d * setup.backups_lengths[i] / num_points
+            if i != 0:
+                splitweight_next = setup.mains[i].lw * setup.main_lengths[i] / num_points \
+                                   + setup.backups[i].lw * setup.backups_lengths[i] / num_points
+                splitdrag_next = setup.mains[i].d * setup.main_lengths[i] / num_points \
+                                 + setup.backups[i].d * setup.backups_lengths[i] / num_points
+                self.splits.append(
+                    Split([start_x, spot.h], (splitweight + splitweight_next) / 2, (splitdrag + splitdrag_next) / 2,
+                          self.mains[i - 1], self.backups[i - 1], self.mains[i], self.backups[i]))
+            start_x += spot.main_lengths[i] * ratio
 
     def get_tension(self):
-        tension_split = []
-        for i,t in enumerate(self.i_tension_split):
-            tension_split.append(t)
-            self.i_tension_split[i] = 0
         tension_main = []
-        for i,t in enumerate(self.i_tension_main):
+        for i, t in enumerate(self.i_tension_main):
             tension_main.append(t)
             self.i_tension_main[i] = 0
         tension_backup = []
         for i, t in enumerate(self.i_tension_backup):
             tension_backup.append(t)
             self.i_tension_backup[i] = 0
-        return tension_split, tension_main, tension_backup
+        return tension_main, tension_backup
 
     def draw(self, win, scale):
-        for split in self.splits:
-            split.draw(win, scale)
         for main in self.mains:
-            for unit in main:
-                unit.draw(win, scale)
+            main.draw(win, scale)
         for backup in self.backups:
-            for unit in backup:
-                unit.draw(win, scale)
+            backup.draw(win, scale)
 
     def acceleration(self):
-        for i, split in enumerate(self.splits):
-            tension = split.acceleration()
-            self.tension_split[i] = tension
-            self.i_tension_split[i] = max(self.i_tension_split[i], tension)
         for i, main in enumerate(self.mains):
             tension = 0
             for unit in main:
@@ -531,7 +269,7 @@ class Rig:
             self.tension_backup[i] = tension
             self.i_tension_backup[i] = max(self.i_tension_backup[i], tension)
 
-    def move(self,dt):
+    def move(self, dt):
         for split in self.splits:
             split.move(dt)
         for main in self.mains:
@@ -547,7 +285,7 @@ class Rig:
         self.move(t)
 
     def runs(self, t, steps):
-        dt = t/steps
+        dt = t / steps
         for ii in range(steps):
             self.run(dt)
 
@@ -593,7 +331,7 @@ class Slackliner:
 
     def move_right(self):
         y1 = self.rig.mains[self.segment][self.unit].y
-        if self.unit < self.rig.segments[self.segment].np -1:
+        if self.unit < self.rig.segments[self.segment].np - 1:
             self.unit += 1
         elif self.segment < self.rig.num_segment - 1:
             self.segment += 1
@@ -636,14 +374,14 @@ class Slackliner:
                 self.rig.backups[seg][unit].ay -= f / self.rig.mains[seg][unit].w
         if self.backupfall_segment != self.segment and self.y - self.leash_length > self.rig.mains[seg][unit].y:
             # hanging in the leash but not when there is already a backup  fall
-            f = -(10000/0.25) * (self.y - self.leash_length - self.rig.mains[seg][unit].y)/self.leash_length
+            f = -(10000 / 0.25) * (self.y - self.leash_length - self.rig.mains[seg][unit].y) / self.leash_length
             self.leash_tension = max(fabs(f), self.leash_tension)
             self.rig.mains[seg][unit].ay -= f / self.rig.mains[seg][unit].w
         if self.y - self.leash_length > self.rig.backups[seg][unit].y:
             f = -(10000 / 0.25) * (self.y - self.leash_length - self.rig.backups[seg][unit].y) / self.leash_length
             self.leash_tension = max(fabs(f), self.leash_tension)
             self.rig.backups[seg][unit].ay -= f / self.rig.backups[seg][unit].w
-        ay = (f+g)/self.weight - 0.1 * self.vy
+        ay = (f + g) / self.weight - 0.1 * self.vy
         self.vy += ay * dt
         self.y += self.vy * dt
         self.leash_recorded = max(self.leash_tension, self.leash_recorded)
@@ -668,7 +406,7 @@ class Slackliner:
         self.rig.move(dt)
 
     def runs(self, t, steps):
-        dt = t/steps
+        dt = t / steps
         for ii in range(steps):
             self.run(dt)
 
@@ -677,7 +415,7 @@ class Slackliner:
             self.backupfall = True
             self.backupfall_segment = segment
             if unit == -1:
-                unit = randint(0, self.rig.segments[segment].np-1)
+                unit = randint(0, self.rig.segments[segment].np - 1)
             self.rig.backup_fall(segment, unit)
             self.fall()
 
@@ -729,7 +467,7 @@ def play(augustin, line, scale, max_steps, dt, steps, folder):
 
         # Save state
         if keys[pygame.K_RETURN]:
-            out_file = open(folder+'save_state.pk', mode='w+b')
+            out_file = open(folder + 'save_state.pk', mode='w+b')
 
             pickle.dump(augustin, out_file)
 
@@ -763,19 +501,19 @@ def play(augustin, line, scale, max_steps, dt, steps, folder):
         augustin.runs(dt, steps)
         t += dt
         time.append(t)
-        leash_tension.append(augustin.get_tension()/1000)
-        height.append( -augustin.y)
+        leash_tension.append(augustin.get_tension() / 1000)
+        height.append(-augustin.y)
         back_up_fall.append(augustin.backupfall_segment)
         split_tension, main_tension, backup_tension = augustin.rig.get_tension()
         for i in range(line.num_segment):
             if i < line.num_segment - 1:
-                splits_tension_h[i].append(split_tension[i]/1000)
-            main_tension_h[i].append(main_tension[i]/1000)
-            backup_tension_h[i].append(backup_tension[i]/1000)
+                splits_tension_h[i].append(split_tension[i] / 1000)
+            main_tension_h[i].append(main_tension[i] / 1000)
+            backup_tension_h[i].append(backup_tension[i] / 1000)
         if line.num_segment > 1:
-            max_force.append(max(max(main_tension), max(split_tension), max(backup_tension))/1000)
+            max_force.append(max(max(main_tension), max(split_tension), max(backup_tension)) / 1000)
         else:
-            max_force.append(max(max(main_tension), max(backup_tension))/1000)
+            max_force.append(max(max(main_tension), max(backup_tension)) / 1000)
         draw(win, augustin, scale)
 
     split_dict = {'split ' + str(i): splits_tension_h[i] for i in range(line.num_segment - 1)}
@@ -820,7 +558,6 @@ def run_and_play(length, height, setup, maxt, leg_length, weight, leash_length, 
 
 
 def load_and_play(saved_file, dt, steps, max_steps, folder):
-
     # Load the slackliner:
     in_file = open(saved_file, mode='r+b')
 
