@@ -27,7 +27,7 @@ freestyle = [f, f]
 length_freestyle = 64
 backup_phi = [Segment(polyester_light,257,polyester_light,275,25)]
 length_backup_phi = 262
-world_record_setup = [d for i in range(27)]
+world_record_setup = [d for _ in range(27)]
 world_record_length = 2717
 
 

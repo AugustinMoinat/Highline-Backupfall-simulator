@@ -478,7 +478,7 @@ class Rig:
 
     def runs(self, t, steps):
         dt = t/steps
-        for ii in range(steps):
+        for _ in range(steps):
             self.run(dt)
 
     def backup_fall(self, segment, unit):
@@ -599,7 +599,7 @@ class Slackliner:
 
     def runs(self, t, steps):
         dt = t/steps
-        for ii in range(steps):
+        for _ in range(steps):
             self.run(dt)
 
     def backup_fall(self, segment, unit=-1):
