@@ -1,7 +1,7 @@
 from math import sqrt, fabs
+from random import randint
 import pygame
 import pandas as pd
-from random import randint
 import pickle
 
 

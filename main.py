@@ -1,8 +1,8 @@
+import os
 from line_and_slacker import *
 from data_visualisation import *
 from parameters import *
 from datetime import datetime
-import os
 
 # General folder of results:
 general = './results/'

@@ -1,7 +1,7 @@
-from math import sqrt, fabs, ceil
+from math import fabs, ceil
+from random import randint
 import pygame
 import pandas as pd
-from random import randint
 import pickle
 import numpy as np
 
@@ -161,7 +161,6 @@ class Split(Element):
         self.right_main.points[0] = self.position
         self.left_backup.points[-1] = self.position
         self.right_backup.points[-1] = self.position
-
 
 
 class Spot:
