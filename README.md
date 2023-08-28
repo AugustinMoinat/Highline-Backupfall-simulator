@@ -1,7 +1,26 @@
 # Highline Backupfall Simulator
 
-This is a project to moderline backup falls and general dynamics in highlines.
-Created by Augustin Moinat for International Slackline Association purposes.
+This is a project to moderlize backup falls and general dynamics in highlines.
+Created by [@AugustinMoinat](https://github.com/AugustinMoinat) for International Slackline Association purposes.
+
+
+## Project setup
+
+1. Create a virtual environment:
+```bash
+python -m venv .venv
+```
+2. Activate it:
+```bash
+source .venv/bin/activate
+```
+3. Install the needed dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+
+## Running 
 
 To run the modelization:
 ```bash
@@ -19,14 +38,6 @@ python main.py
 |<kbd>SPACEBAR</kbd> | Leashfall|
 |<kbd>F1 - F12</kbd> | Trigger mainline failure on corresponding segment|
 |<kbd>ENTER</kbd> | Save current state of modelization|
-
-
-## Dependencies
-
-To install the needed dependencies, run:
-```bash
-pip install -r requirements.txt
-```
 
 
 ## Load
