@@ -1,7 +1,7 @@
 # Highline Backupfall Simulator
 
 This is a project to moderlize backup falls and general dynamics in highlines.
-Created by [@AugustinMoinat](https://github.com/AugustinMoinat) for International Slackline Association purposes.
+Created by [@AugustinMoinat](https://github.com/AugustinMoinat) for [International Slackline Association](https://www.slacklineinternational.org/) purposes.
 
 
 ## Project setup
