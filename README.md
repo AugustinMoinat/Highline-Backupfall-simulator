@@ -33,8 +33,8 @@ python main.py
 |Keys|Description|
 |---|---|
 |<kbd>ESCAPE</kbd> or <kbd>BACKSPACE</kbd> | Stop modelization, show tension graph and save it|
-|<kbd>LEFT</kbd> and <kbd>RIGHT</kbd> ARROW | Move slackliner left or right|
-|<kbd>DOWN</kbd> ARROW | Crouch (to generate bounce)|
+|<kbd>LEFT</kbd> and <kbd>RIGHT</kbd> arrow | Move slackliner left or right|
+|<kbd>DOWN</kbd> arrow | Crouch (to generate bounce)|
 |<kbd>SPACEBAR</kbd> | Leashfall|
 |<kbd>F1 - F12</kbd> | Trigger mainline failure on corresponding segment|
 |<kbd>ENTER</kbd> | Save current state of modelization|
